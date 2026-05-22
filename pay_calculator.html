@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Pay Calculator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+        }
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        h2, h3 { color: #333; margin-top: 0; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input {
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            border-color: #4caf50;
+            outline: none;
+        }
+        .result-box {
+            text-align: center;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .result {
+            font-size: 28px;
+            font-weight: bold;
+            color: #166534;
+        }
+        .sub-result {
+            font-size: 14px;
+            color: #4b5563;
+            margin-top: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover { background-color: #439a46; }
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #edf2f7;
+            font-size: 14px;
+        }
+        .history-item:last-child { border-bottom: none; }
+        .clear-btn {
+            background: none;
+            color: #ef4444;
+            border: none;
+            padding: 0;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 500;
+            text-align: right;
+            width: auto;
+            margin-top: 10px;
+            display: block;
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Calculator Card -->
+    <div class="card">
+        <h2>Pay Calculator</h2>
+        
+        <div class="grid">
+            <div class="input-group">
+                <label for="rate">Hourly Rate ($):</label>
+                <input type="number" id="rate" step="0.0001" value="11.5029" oninput="calculateLivePay()">
+            </div>
+            <div class="input-group">
+                <label for="minutes">Minutes Worked:</label>
+                <input type="number" id="minutes" placeholder="e.g. 1043" oninput="calculateLivePay()">
+            </div>
+        </div>
+
+        <div class="result-box">
+            <label style="color: #166534;">Current Shift Pay</label>
+            <div class="result" id="totalPay">$0.00</div>
+            <div class="sub-result" id="hoursDisplay">0.00 hours</div>
+        </div>
+
+        <button onclick="saveShift()">Save Shift to History</button>
+    </div>
+
+    <!-- History Card -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0;">Shift History</h3>
+            <span id="totalEarnings" style="font-weight: bold; color: #166534; font-size: 16px;">Total: $0.00</span>
+        </div>
+        <ul class="history-list" id="historyList"></ul>
+        <button id="clearLog" class="clear-btn" onclick="clearHistory()">Clear History</button>
+    </div>
+</div>
+
+<script>
+    // Load data from browser storage or set defaults
+    let shiftHistory = JSON.parse(localStorage.getItem('shiftHistory')) || [];
+
+    // Run on startup
+    window.onload = function() {
+        updateHistoryDOM();
+    };
+
+    function calculateLivePay() {
+        const minutes = parseFloat(document.getElementById('minutes').value);
+        const rate = parseFloat(document.getElementById('rate').value);
+        const totalPayElement = document.getElementById('totalPay');
+        const hoursElement = document.getElementById('hoursDisplay');
+        
+        if (isNaN(minutes) || minutes <= 0 || isNaN(rate) || rate <= 0) {
+            totalPayElement.innerText = "$0.00";
+            hoursElement.innerText = "0.00 hours";
+            return { pay: 0, hours: 0 };
+        }
+
+        const hours = minutes / 60;
+        const totalPay = hours * rate;
+
+        totalPayElement.innerText = "$" + totalPay.toFixed(2);
+        hoursElement.innerText = hours.toFixed(2) + " hours";
+
+        return { pay: totalPay, hours: hours, minutes: minutes, rate: rate };
+    }
+
+    function saveShift() {
+        const currentData = calculateLivePay();
+        if (!currentData || currentData.pay === 0) {
+            alert("Please enter valid shift minutes first.");
+            return;
+        }
+
+        const newShift = {
+            id: Date.now(),
+            date: new Date().toLocaleDateString(undefined, {month: 'short', day: 'numeric'}),
+            minutes: currentData.minutes,
+            hours: currentData.hours,
+            rate: currentData.rate,
+            pay: currentData.pay
+        };
+
+        shiftHistory.unshift(newShift); // Add to top of list
+        localStorage.setItem('shiftHistory', JSON.stringify(shiftHistory));
+        
+        // Reset fields
+        document.getElementById('minutes').value = '';
+        calculateLivePay();
+        
+        updateHistoryDOM();
+    }
+
+    function updateHistoryDOM() {
+        const listElement = document.getElementById('historyList');
+        const totalEarningsElement = document.getElementById('totalEarnings');
+        listElement.innerHTML = '';
+        
+        if (shiftHistory.length === 0) {
+            listElement.innerHTML = '<li class="history-item" style="color: #9ca3af; justify-content: center;">No shifts saved yet</li>';
+            totalEarningsElement.innerText = "Total: $0.00";
+            return;
+        }
+
+        let totalAccumulated = 0;
+
+        shiftHistory.forEach(shift => {
+            totalAccumulated += shift.pay;
+            const li = document.createElement('li');
+            li.className = 'history-item';
+            li.innerHTML = `
+                <div>
+                    <strong>${shift.date}</strong> — ${shift.minutes} mins (${shift.hours.toFixed(1)}h)<br>
+                    <span style="font-size: 11px; color: #666;">Rate: $${shift.rate.toFixed(4)}/hr</span>
+                </div>
+                <strong style="color: #333;">$${shift.pay.toFixed(2)}</strong>
+            `;
+            listElement.appendChild(li);
+        });
+
+        totalEarningsElement.innerText = "Total: $" + totalAccumulated.toFixed(2);
+    }
+
+    function clearHistory() {
+        if (confirm("Are you sure you want to delete all saved shifts?")) {
+            shiftHistory = [];
+            localStorage.removeItem('shiftHistory');
+            updateHistoryDOM();
+        }
+    }
+</script>
+
+</body>
+</html>
